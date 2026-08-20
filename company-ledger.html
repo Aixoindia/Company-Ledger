@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Company Ledger — Khata Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --ink:#182620;
+    --paper:#EFE3C8;
+    --paper-2:#E7D9B8;
+    --green:#16332B;
+    --green-2:#1F4438;
+    --brass:#B8892B;
+    --brass-light:#D9B45F;
+    --income:#2F6F62;
+    --expense:#8C3B2E;
+    --line: rgba(24,38,32,0.15);
+    --white:#FBF7EC;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{ display:flex; min-height:100vh; }
+
+  /* Sidebar */
+  .sidebar{
+    width:220px; flex-shrink:0;
+    background: var(--green);
+    color: var(--white);
+    display:flex; flex-direction:column;
+    padding:28px 0;
+    position:sticky; top:0; height:100vh;
+  }
+  .brand{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:22px;
+    padding:0 24px 24px 24px;
+    border-bottom:1px solid rgba(251,247,236,0.15);
+    margin-bottom:18px;
+    letter-spacing:0.3px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .brand-mark{
+    width:34px; height:34px; border-radius:9px;
+    background: var(--brass); color:var(--green);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:17px;
+    flex-shrink:0;
+  }
+  .brand-text{ display:flex; flex-direction:column; }
+  .brand span{ display:block; font-family:'IBM Plex Mono', monospace; font-weight:400; font-size:11px; letter-spacing:1.5px; color:var(--brass-light); text-transform:uppercase; margin-top:4px;}
+  nav{ display:flex; flex-direction:column; gap:2px; padding:0 12px;}
+  nav button{
+    all:unset; cursor:pointer;
+    padding:11px 12px; border-radius:6px;
+    font-size:14.5px; color: rgba(251,247,236,0.75);
+    display:flex; align-items:center; gap:10px;
+    transition: background .15s, color .15s;
+  }
+  nav button svg{ flex-shrink:0; }
+  nav button:hover{ background: rgba(251,247,236,0.08); color:var(--white); }
+  nav button.active{ background: var(--brass); color: var(--green); font-weight:600; }
+  .sidebar-foot{
+    margin-top:auto; padding:16px 24px 0 24px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px; color:rgba(251,247,236,0.4);
+    border-top:1px solid rgba(251,247,236,0.15);
+    line-height:1.6;
+  }
+  .sync-pill{
+    display:inline-flex; align-items:center; gap:5px;
+    margin-top:8px; font-size:10.5px; color:var(--brass-light);
+  }
+  .sync-dot{ width:7px; height:7px; border-radius:50%; background:var(--brass-light); flex-shrink:0; }
+  .sync-dot.live{ background:#5FBF8F; box-shadow:0 0 0 3px rgba(95,191,143,0.2); }
+
+  /* Main */
+  main{ flex:1; padding:36px 44px; max-width:1100px; }
+  h1{ font-family:'Fraunces', serif; font-size:28px; margin:0 0 4px 0; font-weight:600;}
+  .subtitle{ color:rgba(24,38,32,0.6); font-size:13.5px; margin-bottom:28px;}
+  .view{ display:none; }
+  .view.active{ display:block; animation: fadein .25s ease; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  /* Stamp / seal */
+  .stamp-row{ display:flex; gap:20px; align-items:center; flex-wrap:wrap; margin-bottom:32px;}
+  .seal{
+    width:130px; height:130px; border-radius:50%;
+    border:3px solid var(--brass);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background: radial-gradient(circle, var(--white) 60%, var(--paper-2) 100%);
+    transform: rotate(-6deg);
+    box-shadow: 0 3px 0 rgba(24,38,32,0.08);
+    flex-shrink:0;
+  }
+  .seal .label{ font-family:'IBM Plex Mono', monospace; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--brass);}
+  .seal .amt{ font-family:'Fraunces', serif; font-weight:700; font-size:17px; margin-top:2px; text-align:center; padding:0 8px;}
+  .mini-cards{ display:flex; gap:16px; flex-wrap:wrap; flex:1;}
+  .mini-card{
+    background:var(--white); border:1px solid var(--line); border-radius:10px;
+    padding:16px 20px; min-width:150px; flex:1;
+    display:flex; align-items:flex-start; gap:12px;
+  }
+  .mini-card .icon{
+    width:32px; height:32px; border-radius:8px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background: var(--paper-2); color:var(--ink);
+  }
+  .mini-card.income .icon{ background: rgba(47,111,98,0.12); color:var(--income); }
+  .mini-card.expense .icon{ background: rgba(140,59,46,0.12); color:var(--expense); }
+  .mini-card .k{ font-size:11.5px; text-transform:uppercase; letter-spacing:0.8px; color:rgba(24,38,32,0.55); font-weight:600;}
+  .mini-card .v{ font-family:'IBM Plex Mono', monospace; font-size:22px; font-weight:600; margin-top:6px;}
+  .mini-card.income .v{ color:var(--income); }
+  .mini-card.expense .v{ color:var(--expense); }
+
+  /* Chart */
+  .chart-card{ background:var(--white); border:1px solid var(--line); border-radius:10px; padding:20px 24px; margin-bottom:28px;}
+  .chart-card h3{ margin:0 0 16px 0; font-family:'Fraunces', serif; font-weight:600; font-size:16px;}
+  .bars{ display:flex; align-items:flex-end; gap:14px; height:150px; }
+  .bar-group{ flex:1; display:flex; gap:3px; align-items:flex-end; height:100%; position:relative;}
+  .bar{ flex:1; border-radius:3px 3px 0 0; min-height:2px; }
+  .bar.in{ background: var(--income); }
+  .bar.ex{ background: var(--expense); }
+  .bar-labels{ display:flex; gap:14px; margin-top:8px; }
+  .bar-labels span{ flex:1; text-align:center; font-size:11px; color:rgba(24,38,32,0.55); font-family:'IBM Plex Mono',monospace;}
+
+  /* Tables */
+  .toolbar{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center;}
+  input, select, textarea{
+    font-family:'IBM Plex Sans', sans-serif; font-size:13.5px;
+    padding:9px 12px; border:1px solid var(--line); border-radius:6px;
+    background:var(--white); color:var(--ink);
+  }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--brass); outline-offset:1px; }
+  .btn{
+    all:unset; cursor:pointer; font-family:'IBM Plex Sans', sans-serif; font-weight:600;
+    font-size:13.5px; padding:9px 16px; border-radius:6px; background:var(--green); color:var(--white);
+    transition: background .15s;
+  }
+  .btn:hover{ background: var(--green-2); }
+  .btn.brass{ background:var(--brass); color:var(--green); }
+  .btn.brass:hover{ background:var(--brass-light); }
+  .btn.ghost{ background:transparent; border:1px solid var(--line); color:var(--ink); }
+  .btn.danger{ background:transparent; color:var(--expense); font-weight:500; padding:6px 10px; font-size:12.5px;}
+  .btn.danger:hover{ text-decoration:underline; }
+  .btn.small{ padding:6px 10px; font-size:12.5px; margin-right:6px; }
+  .btn:focus-visible{ outline:2px solid var(--green); outline-offset:2px; }
+
+  table{ width:100%; border-collapse:collapse; background:var(--white); border-radius:10px; overflow:hidden; border:1px solid var(--line);}
+  th, td{ text-align:left; padding:11px 14px; font-size:13.5px; border-bottom:1px solid var(--line); }
+  th{ background: var(--paper-2); font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:rgba(24,38,32,0.6); font-weight:600;}
+  tr:last-child td{ border-bottom:none; }
+  td.amt{ font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  td.amt.income{ color:var(--income); }
+  td.amt.expense{ color:var(--expense); }
+  .empty{ padding:40px 20px; text-align:center; color:rgba(24,38,32,0.45); font-size:13.5px; }
+
+  /* Form panel */
+  .form-card{ background:var(--white); border:1px solid var(--line); border-radius:10px; padding:20px 24px; margin-bottom:24px; }
+  .form-card h3{ margin:0 0 14px 0; font-family:'Fraunces', serif; font-size:16px; font-weight:600;}
+  .form-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:12px;}
+  .form-grid label{ display:flex; flex-direction:column; gap:5px; font-size:12px; font-weight:600; color:rgba(24,38,32,0.65);}
+
+  /* Backup view */
+  .backup-card{ background:var(--white); border:1px solid var(--line); border-radius:10px; padding:24px; margin-bottom:20px;}
+  .backup-card h3{ margin:0 0 6px 0; font-family:'Fraunces', serif; font-size:17px;}
+  .backup-card p{ font-size:13px; color:rgba(24,38,32,0.6); margin:4px 0 16px 0; line-height:1.5;}
+  .file-hidden{ display:none; }
+  .toast{
+    position:fixed; bottom:24px; right:24px; background:var(--green); color:var(--white);
+    padding:12px 20px; border-radius:8px; font-size:13.5px; box-shadow:0 4px 14px rgba(0,0,0,0.2);
+    opacity:0; transform:translateY(10px); transition:opacity .2s, transform .2s; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform:translateY(0);}
+
+  /* Login gate */
+  .login-gate{
+    position:fixed; inset:0; background: var(--green);
+    display:flex; align-items:center; justify-content:center; z-index:100;
+  }
+  .login-card{
+    background:var(--white); border-radius:14px; padding:36px 32px;
+    width:100%; max-width:320px; text-align:center;
+    box-shadow:0 10px 40px rgba(0,0,0,0.25);
+  }
+  .login-card h2{ font-family:'Fraunces', serif; font-size:20px; margin:0 0 6px 0; }
+  .login-card p{ font-size:13px; color:rgba(24,38,32,0.6); margin:0 0 18px 0; line-height:1.5; }
+  .login-card input{ width:100%; margin-bottom:10px; }
+  .login-card .btn{ width:100%; margin-top:4px; }
+  .login-error{ color:var(--expense); font-size:12.5px; margin-top:10px; }
+
+  @media (max-width:760px){
+    .app{ flex-direction:column; }
+    .sidebar{ width:100%; height:auto; position:relative; padding:16px; flex-direction:row; align-items:center; overflow-x:auto;}
+    .brand{ border:none; padding:0 12px 0 0; margin:0; font-size:16px;}
+    .brand span{ display:none; }
+    nav{ flex-direction:row; padding:0; }
+    .sidebar-foot{ display:none; }
+    main{ padding:20px; }
+  }
+</style>
+</head>
+<body>
+<div class="login-gate" id="loginGate" style="display:none;">
+  <div class="login-card">
+    <div class="brand-mark" style="margin:0 auto 14px auto;">₹</div>
+    <h2 id="loginTitle">Connecting…</h2>
+    <p id="loginSubtitle">Cloud se data load ho raha hai, thoda ruko…</p>
+    <input type="password" id="loginPassword" placeholder="Password" style="display:none;" onkeydown="if(event.key==='Enter') handleLoginSubmit()">
+    <input type="password" id="loginPasswordConfirm" placeholder="Confirm password" style="display:none;" onkeydown="if(event.key==='Enter') handleLoginSubmit()">
+    <button class="btn brass" id="loginSubmitBtn" style="display:none;" onclick="handleLoginSubmit()">Unlock</button>
+    <div id="loginError" class="login-error" style="display:none;"></div>
+  </div>
+</div>
+
+<div class="app" id="appRoot">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">₹</div>
+      <div class="brand-text">Khata<span>Company Ledger</span></div>
+    </div>
+    <nav>
+      <button data-view="dashboard" class="active"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</button>
+      <button data-view="income"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>Income</button>
+      <button data-view="expense"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>Expense</button>
+      <button data-view="clients"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Clients</button>
+      <button data-view="backup"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Backup / Export</button>
+    </nav>
+    <div class="sidebar-foot">
+      <span id="footText">Data saved only in this browser on this PC.</span>
+      <div class="sync-pill"><span class="sync-dot" id="syncDot"></span><span id="autosaveStatus">Autosave on</span></div>
+      <button class="btn ghost" id="lockBtn" style="display:none; margin-top:10px; padding:6px 10px; font-size:11.5px; color:var(--white); border-color:rgba(251,247,236,0.3);" onclick="lockApp()">Lock</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section class="view active" id="view-dashboard">
+      <h1>Dashboard</h1>
+      <div class="subtitle">Overview of company income, expenses aur balance</div>
+
+      <div class="stamp-row">
+        <div class="seal">
+          <div class="label">Net Balance</div>
+          <div class="amt" id="sealBalance">₹0</div>
+        </div>
+        <div class="mini-cards">
+          <div class="mini-card income">
+            <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+            <div><div class="k">Total Income</div><div class="v" id="cardIncome">₹0</div></div>
+          </div>
+          <div class="mini-card expense">
+            <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg></div>
+            <div><div class="k">Total Expense</div><div class="v" id="cardExpense">₹0</div></div>
+          </div>
+          <div class="mini-card">
+            <div class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+            <div><div class="k">Total Clients</div><div class="v" id="cardClients">0</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Last 6 months</h3>
+        <div class="bars" id="chartBars"></div>
+        <div class="bar-labels" id="chartLabels"></div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Recent entries</h3>
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Client</th><th>Amount</th></tr></thead>
+          <tbody id="recentBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- INCOME -->
+    <section class="view" id="view-income">
+      <h1>Income</h1>
+      <div class="subtitle">Sab income entries yahan track karo</div>
+
+      <div class="form-card">
+        <h3 id="incomeFormTitle">Add income</h3>
+        <div class="form-grid">
+          <label>Date <input type="date" id="inDate"></label>
+          <label>Amount (₹) <input type="number" id="inAmount" min="0" step="0.01" placeholder="0.00"></label>
+          <label>Category
+            <select id="inCategory" onchange="handleCategoryChange('income')"></select>
+          </label>
+          <label>Client <select id="inClient"></select></label>
+          <label>Note <input type="text" id="inNote" placeholder="Optional"></label>
+        </div>
+        <button class="btn brass" id="incomeSubmitBtn" onclick="addTransaction('income')">+ Add Income</button>
+        <button class="btn ghost" id="incomeCancelBtn" style="display:none;" onclick="cancelEditTransaction('income')">Cancel edit</button>
+      </div>
+
+      <div class="toolbar">
+        <input type="month" id="incomeMonthFilter" onchange="renderIncome()">
+        <input type="text" id="incomeSearch" placeholder="Search note / client..." oninput="renderIncome()">
+        <button class="btn ghost" onclick="clearFilters('income')">Clear filters</button>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Category</th><th>Client</th><th>Note</th><th>Amount</th><th></th></tr></thead>
+        <tbody id="incomeBody"></tbody>
+      </table>
+    </section>
+
+    <!-- EXPENSE -->
+    <section class="view" id="view-expense">
+      <h1>Expense</h1>
+      <div class="subtitle">Sab expenses yahan track karo</div>
+
+      <div class="form-card">
+        <h3 id="expenseFormTitle">Add expense</h3>
+        <div class="form-grid">
+          <label>Date <input type="date" id="exDate"></label>
+          <label>Amount (₹) <input type="number" id="exAmount" min="0" step="0.01" placeholder="0.00"></label>
+          <label>Category
+            <select id="exCategory" onchange="handleCategoryChange('expense')"></select>
+          </label>
+          <label>Client <select id="exClient"></select></label>
+          <label>Note <input type="text" id="exNote" placeholder="Optional"></label>
+        </div>
+        <button class="btn brass" id="expenseSubmitBtn" onclick="addTransaction('expense')">+ Add Expense</button>
+        <button class="btn ghost" id="expenseCancelBtn" style="display:none;" onclick="cancelEditTransaction('expense')">Cancel edit</button>
+      </div>
+
+      <div class="toolbar">
+        <input type="month" id="expenseMonthFilter" onchange="renderExpense()">
+        <input type="text" id="expenseSearch" placeholder="Search note / client..." oninput="renderExpense()">
+        <button class="btn ghost" onclick="clearFilters('expense')">Clear filters</button>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Category</th><th>Client</th><th>Note</th><th>Amount</th><th></th></tr></thead>
+        <tbody id="expenseBody"></tbody>
+      </table>
+    </section>
+
+    <!-- CLIENTS -->
+    <section class="view" id="view-clients">
+      <h1>Clients</h1>
+      <div class="subtitle">Client list aur unke saath total business</div>
+
+      <div class="form-card">
+        <h3 id="clientFormTitle">Add client</h3>
+        <div class="form-grid">
+          <label>Name <input type="text" id="clName" placeholder="Client / company name"></label>
+          <label>Phone <input type="text" id="clPhone" placeholder="Optional"></label>
+          <label>Email <input type="text" id="clEmail" placeholder="Optional"></label>
+          <label>Note <input type="text" id="clNote" placeholder="Optional"></label>
+        </div>
+        <button class="btn brass" id="clientSubmitBtn" onclick="addClient()">+ Add Client</button>
+        <button class="btn ghost" id="clientCancelBtn" style="display:none;" onclick="cancelEditClient()">Cancel edit</button>
+      </div>
+
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Total Income</th><th>Total Expense</th><th></th></tr></thead>
+        <tbody id="clientsBody"></tbody>
+      </table>
+    </section>
+
+    <!-- BACKUP -->
+    <section class="view" id="view-backup">
+      <h1>Backup / Export</h1>
+      <div class="subtitle">Apna data safe rakho aur Excel me export karo</div>
+
+      <div class="backup-card">
+        <h3>Export to Excel</h3>
+        <p>Income, Expense, Clients aur Summary — sab ek .xlsx file me, alag-alag sheets ke saath.</p>
+        <button class="btn brass" onclick="exportExcel()">Export as Excel (.xlsx)</button>
+      </div>
+
+      <div class="backup-card">
+        <h3>Backup data</h3>
+        <p>Pura data ek .json file me save karo — kisi bhi PC par restore kiya ja sakta hai.</p>
+        <button class="btn" onclick="exportJSON()">Download backup (.json)</button>
+      </div>
+
+      <div class="backup-card">
+        <h3>Restore backup</h3>
+        <p>Pehle se saved .json backup file se data wapas load karo. Isse current data replace ho jayega.</p>
+        <input type="file" id="restoreFile" accept="application/json" class="file-hidden" onchange="importJSON(event)">
+        <button class="btn ghost" onclick="document.getElementById('restoreFile').click()">Choose backup file</button>
+      </div>
+
+      <div class="backup-card" id="changePasswordCard" style="display:none;">
+        <h3>Change team password</h3>
+        <p>Naya password set karo — aage se sabko login karne ke liye yahi chahiye hoga.</p>
+        <div class="form-grid" style="max-width:360px;">
+          <label>Current password <input type="password" id="cpCurrent"></label>
+          <label>New password <input type="password" id="cpNew"></label>
+          <label>Confirm new password <input type="password" id="cpConfirm"></label>
+        </div>
+        <button class="btn brass" onclick="changeTeamPassword()">Update Password</button>
+      </div>
+
+      <div class="backup-card">
+        <h3>Reset all data</h3>
+        <p>Sab transactions aur clients permanently delete ho jayenge. Pehle backup zaroor le lo.</p>
+        <button class="btn danger" style="border:1px solid var(--expense); padding:9px 16px;" onclick="resetAll()">Erase everything</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- State ---------- */
+const STORAGE_KEY = 'companyLedgerData_v1';
+let state = loadState();
+
+/* ---------- OPTIONAL: Team sync (shared data across everyone using this link) ----------
+   By default this app is LOCAL-ONLY (data stays in this browser).
+   To make it SHARED across your whole team on the same link:
+   1. Create a free Firebase project: https://console.firebase.google.com
+   2. Firestore Database → Create database → Start in test mode.
+   3. Project settings → General → "Your apps" → Add app (Web </>) → copy the config object.
+   4. Paste it below in FIREBASE_CONFIG.
+   5. Change TEAM_CODE to something private only your team knows (acts like a shared password).
+   Until you do this, the app keeps working exactly as before, saved only on this PC. */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBO2RcUf4KNhAaELu6vmP28Ro8mnc96nfE",
+  authDomain: "aixo-ledger.firebaseapp.com",
+  projectId: "aixo-ledger",
+  storageBucket: "aixo-ledger.firebasestorage.app",
+  messagingSenderId: "397194973295",
+  appId: "1:397194973295:web:ebd49bd7f14c23c4763d9a"
+};
+const TEAM_CODE = "aixo-ledger-2026";
+
+let cloudEnabled = false;
+let docRef = null;
+let authMode = 'loading';
+
+function initCloud(){
+  if(!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes('PASTE')){
+    renderAll(); // not configured — local-only mode, no gate, no network calls
+    return;
+  }
+  document.getElementById('appRoot').style.display = 'none';
+  showLoginGate('loading');
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const db = firebase.firestore();
+    docRef = db.collection('ledgers').doc(TEAM_CODE);
+    cloudEnabled = true;
+    setSyncMode(true);
+    docRef.onSnapshot(snap=>{
+      if(snap.exists){
+        state = snap.data();
+        if(!state.categories) state.categories = { income:[], expense:[] };
+        if(!state.security) state.security = { passwordHash: null };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        renderAll();
+        flashSaved();
+        evaluateAuthGate();
+      } else {
+        docRef.set(state); // first device to connect seeds the shared document
+      }
+    }, err=>{
+      console.error('Cloud sync error', err);
+      toast('Team sync me dikkat aa rahi hai, local data safe hai');
+    });
+  }catch(e){
+    console.error('Firebase init failed', e);
+    renderAll();
+    showApp();
+  }
+}
+function setSyncMode(isCloud){
+  document.getElementById('footText').textContent = isCloud
+    ? 'Data is synced live with your whole team.'
+    : 'Data saved only in this browser on this PC.';
+  document.getElementById('syncDot').classList.toggle('live', isCloud);
+  document.getElementById('changePasswordCard').style.display = isCloud ? 'block' : 'none';
+  document.getElementById('lockBtn').style.display = isCloud ? 'inline-block' : 'none';
+}
+
+/* ---------- Login gate (password protects the shared team data) ---------- */
+async function sha256(text){
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function showApp(){
+  document.getElementById('appRoot').style.display = '';
+  document.getElementById('loginGate').style.display = 'none';
+}
+function showLoginGate(mode){
+  authMode = mode;
+  document.getElementById('appRoot').style.display = 'none';
+  document.getElementById('loginGate').style.display = 'flex';
+  const pw = document.getElementById('loginPassword');
+  const pwConfirm = document.getElementById('loginPasswordConfirm');
+  const submitBtn = document.getElementById('loginSubmitBtn');
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  pw.value=''; pwConfirm.value='';
+
+  if(mode === 'loading'){
+    document.getElementById('loginTitle').textContent = 'Connecting…';
+    document.getElementById('loginSubtitle').textContent = 'Cloud se data load ho raha hai, thoda ruko…';
+    pw.style.display='none'; pwConfirm.style.display='none'; submitBtn.style.display='none';
+    return;
+  }
+  pw.style.display='block'; submitBtn.style.display='block';
+  if(mode === 'setup'){
+    document.getElementById('loginTitle').textContent = 'Set a team password';
+    document.getElementById('loginSubtitle').textContent = 'Ye password aage se sabko is ledger ko kholne ke liye chahiye hoga — safe jagah likh lena.';
+    pwConfirm.style.display='block';
+    submitBtn.textContent = 'Set password & Continue';
+  } else {
+    document.getElementById('loginTitle').textContent = 'Team Login';
+    document.getElementById('loginSubtitle').textContent = 'Apna team password daal ke unlock karo.';
+    pwConfirm.style.display='none';
+    submitBtn.textContent = 'Unlock';
+  }
+  pw.focus();
+}
+function evaluateAuthGate(){
+  if(!state.security || !state.security.passwordHash){
+    showLoginGate('setup');
+  } else if(sessionStorage.getItem('ledgerUnlocked_'+TEAM_CODE) === 'yes'){
+    showApp();
+  } else {
+    showLoginGate('login');
+  }
+}
+async function handleLoginSubmit(){
+  const pw = document.getElementById('loginPassword').value;
+  if(!pw){ showLoginError('Password daalo'); return; }
+
+  if(authMode === 'setup'){
+    const confirmPw = document.getElementById('loginPasswordConfirm').value;
+    if(pw.length < 4){ showLoginError('Kam se kam 4 characters ka password rakho'); return; }
+    if(pw !== confirmPw){ showLoginError('Password match nahi ho raha'); return; }
+    const hash = await sha256(pw);
+    if(!state.security) state.security = {};
+    state.security.passwordHash = hash;
+    saveState();
+    sessionStorage.setItem('ledgerUnlocked_'+TEAM_CODE, 'yes');
+    showApp();
+    toast('Password set ho gaya — ye sab team members ko de dena');
+  } else {
+    const hash = await sha256(pw);
+    if(state.security && hash === state.security.passwordHash){
+      sessionStorage.setItem('ledgerUnlocked_'+TEAM_CODE, 'yes');
+      showApp();
+    } else {
+      showLoginError('Password galat hai');
+    }
+  }
+}
+function showLoginError(msg){
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function lockApp(){
+  sessionStorage.removeItem('ledgerUnlocked_'+TEAM_CODE);
+  showLoginGate('login');
+}
+async function changeTeamPassword(){
+  const current = document.getElementById('cpCurrent').value;
+  const next = document.getElementById('cpNew').value;
+  const confirmPw = document.getElementById('cpConfirm').value;
+  if(!current || !next){ toast('Sab fields bharo'); return; }
+  const currentHash = await sha256(current);
+  if(!state.security || currentHash !== state.security.passwordHash){ toast('Current password galat hai'); return; }
+  if(next.length < 4){ toast('Naya password kam se kam 4 characters ka rakho'); return; }
+  if(next !== confirmPw){ toast('Naya password match nahi ho raha'); return; }
+  state.security.passwordHash = await sha256(next);
+  saveState();
+  ['cpCurrent','cpNew','cpConfirm'].forEach(id=>document.getElementById(id).value='');
+  toast('Password update ho gaya');
+}
+
+const DEFAULT_CATEGORIES = {
+  income: ['Client Payment','Sponsorship','Ad Revenue','Other'],
+  expense: ['Rent','Salary','Equipment','Software','Marketing','Utilities','Travel','Other']
+};
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const data = JSON.parse(raw);
+      if(!data.categories) data.categories = { income:[], expense:[] };
+      if(!data.security) data.security = { passwordHash: null };
+      return data;
+    }
+  }catch(e){ console.error('load failed', e); }
+  return { transactions: [], clients: [], categories: { income:[], expense:[] }, security: { passwordHash: null } };
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if(cloudEnabled && docRef){
+    docRef.set(state).catch(e=>{ console.error('cloud save failed', e); toast('Cloud save fail hui, local safe hai'); });
+  }
+  flashSaved();
+}
+function flashSaved(){
+  const el = document.getElementById('autosaveStatus');
+  if(!el) return;
+  el.textContent = 'Saved ' + new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function fmt(n){ return '₹' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:2}); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+/* ---------- Nav ---------- */
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    renderAll();
+  });
+});
+
+/* ---------- Toast ---------- */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------- Client dropdown fill ---------- */
+function fillClientSelects(){
+  const opts = '<option value="">— No client —</option>' + state.clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  document.getElementById('inClient').innerHTML = opts;
+  document.getElementById('exClient').innerHTML = opts;
+}
+function clientName(id){
+  const c = state.clients.find(c=>c.id===id);
+  return c ? c.name : '—';
+}
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ---------- Categories (with custom additions) ---------- */
+function getCategories(type){
+  const custom = (state.categories && state.categories[type]) || [];
+  const all = [...DEFAULT_CATEGORIES[type]];
+  custom.forEach(c=>{ if(!all.some(a=>a.toLowerCase()===c.toLowerCase())) all.push(c); });
+  return all;
+}
+function refreshCategorySelect(type, selected){
+  const selId = type==='income' ? 'inCategory' : 'exCategory';
+  const sel = document.getElementById(selId);
+  const cats = getCategories(type);
+  const keep = selected !== undefined ? selected : sel.value;
+  sel.innerHTML = cats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
+    + `<option value="__add__">+ Add new category…</option>`;
+  if(keep && cats.some(c=>c===keep)) sel.value = keep;
+}
+function handleCategoryChange(type){
+  const selId = type==='income' ? 'inCategory' : 'exCategory';
+  const sel = document.getElementById(selId);
+  if(sel.value !== '__add__') return;
+  const name = prompt('Naya category ka naam likho:');
+  if(name && name.trim()){
+    const trimmed = name.trim();
+    if(!state.categories) state.categories = { income:[], expense:[] };
+    if(!state.categories[type]) state.categories[type] = [];
+    if(!getCategories(type).some(c=>c.toLowerCase()===trimmed.toLowerCase())){
+      state.categories[type].push(trimmed);
+      saveState();
+    }
+    refreshCategorySelect(type, trimmed);
+    toast('Category add ho gayi');
+  } else {
+    refreshCategorySelect(type, getCategories(type)[0]);
+  }
+}
+
+/* ---------- Transactions ---------- */
+let editingTransactionId = { income:null, expense:null };
+
+function addTransaction(type){
+  const prefix = type==='income' ? 'in' : 'ex';
+  const date = document.getElementById(prefix+'Date').value || todayISO();
+  const amount = parseFloat(document.getElementById(prefix+'Amount').value);
+  const category = document.getElementById(prefix+'Category').value;
+  const clientId = document.getElementById(prefix+'Client').value;
+  const note = document.getElementById(prefix+'Note').value.trim();
+
+  if(category === '__add__'){ toast('Pehle category select karo'); return; }
+  if(!amount || amount<=0){ toast('Amount daalo pehle'); return; }
+
+  if(editingTransactionId[type]){
+    const t = state.transactions.find(t=>t.id===editingTransactionId[type]);
+    if(t){ t.date=date; t.amount=amount; t.category=category; t.clientId=clientId; t.note=note; }
+    editingTransactionId[type] = null;
+    toggleTransactionEditMode(type, false);
+    toast((type==='income'?'Income':'Expense') + ' update ho gaya');
+  } else {
+    state.transactions.push({ id:uid(), type, date, amount, category, clientId, note });
+    toast((type==='income'?'Income':'Expense') + ' add ho gaya');
+  }
+  saveState();
+
+  document.getElementById(prefix+'Amount').value='';
+  document.getElementById(prefix+'Note').value='';
+  document.getElementById(prefix+'Date').value = todayISO();
+  document.getElementById(prefix+'Client').value = '';
+
+  renderAll();
+}
+function deleteTransaction(id){
+  state.transactions = state.transactions.filter(t=>t.id!==id);
+  saveState();
+  renderAll();
+}
+function editTransaction(id){
+  const t = state.transactions.find(t=>t.id===id);
+  if(!t) return;
+  // switch to the right tab first (this re-renders and rebuilds client dropdowns)
+  document.querySelector(`nav button[data-view="${t.type}"]`).click();
+
+  const prefix = t.type==='income' ? 'in' : 'ex';
+  document.getElementById(prefix+'Date').value = t.date;
+  document.getElementById(prefix+'Amount').value = t.amount;
+  refreshCategorySelect(t.type, t.category);
+  document.getElementById(prefix+'Client').value = t.clientId || '';
+  document.getElementById(prefix+'Note').value = t.note || '';
+
+  editingTransactionId[t.type] = id;
+  toggleTransactionEditMode(t.type, true);
+  document.getElementById(prefix+'Amount').focus();
+}
+function cancelEditTransaction(type){
+  editingTransactionId[type] = null;
+  toggleTransactionEditMode(type, false);
+  const prefix = type==='income' ? 'in' : 'ex';
+  document.getElementById(prefix+'Amount').value='';
+  document.getElementById(prefix+'Note').value='';
+  document.getElementById(prefix+'Client').value='';
+  document.getElementById(prefix+'Date').value = todayISO();
+  refreshCategorySelect(type, getCategories(type)[0]);
+}
+function toggleTransactionEditMode(type, isEditing){
+  const idPrefix = type==='income' ? 'income' : 'expense';
+  const label = type==='income' ? 'Income' : 'Expense';
+  document.getElementById(idPrefix+'FormTitle').textContent = isEditing ? ('Edit '+label) : ('Add '+label.toLowerCase());
+  document.getElementById(idPrefix+'SubmitBtn').textContent = isEditing ? ('Update '+label) : ('+ Add '+label);
+  document.getElementById(idPrefix+'CancelBtn').style.display = isEditing ? 'inline-block' : 'none';
+}
+
+/* ---------- Clients ---------- */
+let editingClientId = null;
+
+function addClient(){
+  const name = document.getElementById('clName').value.trim();
+  if(!name){ toast('Client ka naam daalo'); return; }
+  const phone = document.getElementById('clPhone').value.trim();
+  const email = document.getElementById('clEmail').value.trim();
+  const note = document.getElementById('clNote').value.trim();
+
+  if(editingClientId){
+    const c = state.clients.find(c=>c.id===editingClientId);
+    if(c){ c.name=name; c.phone=phone; c.email=email; c.note=note; }
+    editingClientId = null;
+    toggleClientEditMode(false);
+    toast('Client update ho gaya');
+  } else {
+    state.clients.push({ id:uid(), name, phone, email, note });
+    toast('Client add ho gaya');
+  }
+  saveState();
+  ['clName','clPhone','clEmail','clNote'].forEach(id=>document.getElementById(id).value='');
+  renderAll();
+}
+function deleteClient(id){
+  state.clients = state.clients.filter(c=>c.id!==id);
+  saveState();
+  renderAll();
+}
+function editClient(id){
+  const c = state.clients.find(c=>c.id===id);
+  if(!c) return;
+  document.querySelector(`nav button[data-view="clients"]`).click();
+  document.getElementById('clName').value = c.name;
+  document.getElementById('clPhone').value = c.phone || '';
+  document.getElementById('clEmail').value = c.email || '';
+  document.getElementById('clNote').value = c.note || '';
+  editingClientId = id;
+  toggleClientEditMode(true);
+  document.getElementById('clName').focus();
+}
+function cancelEditClient(){
+  editingClientId = null;
+  toggleClientEditMode(false);
+  ['clName','clPhone','clEmail','clNote'].forEach(id=>document.getElementById(id).value='');
+}
+function toggleClientEditMode(isEditing){
+  document.getElementById('clientFormTitle').textContent = isEditing ? 'Edit client' : 'Add client';
+  document.getElementById('clientSubmitBtn').textContent = isEditing ? 'Update Client' : '+ Add Client';
+  document.getElementById('clientCancelBtn').style.display = isEditing ? 'inline-block' : 'none';
+}
+
+/* ---------- Filters ---------- */
+function clearFilters(kind){
+  document.getElementById(kind+'MonthFilter').value='';
+  document.getElementById(kind+'Search').value='';
+  kind==='income' ? renderIncome() : renderExpense();
+}
+
+/* ---------- Renderers ---------- */
+function renderDashboard(){
+  const income = state.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense = state.transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  document.getElementById('sealBalance').textContent = fmt(income-expense);
+  document.getElementById('cardIncome').textContent = fmt(income);
+  document.getElementById('cardExpense').textContent = fmt(expense);
+  document.getElementById('cardClients').textContent = state.clients.length;
+
+  // last 6 months chart
+  const months=[];
+  const now = new Date();
+  for(let i=5;i>=0;i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push({ key: d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'), label: d.toLocaleString('en-IN',{month:'short'}) });
+  }
+  const data = months.map(m=>{
+    const inc = state.transactions.filter(t=>t.type==='income' && t.date.startsWith(m.key)).reduce((s,t)=>s+t.amount,0);
+    const exp = state.transactions.filter(t=>t.type==='expense' && t.date.startsWith(m.key)).reduce((s,t)=>s+t.amount,0);
+    return {...m, inc, exp};
+  });
+  const max = Math.max(1, ...data.map(d=>Math.max(d.inc,d.exp)));
+  document.getElementById('chartBars').innerHTML = data.map(d=>`
+    <div class="bar-group">
+      <div class="bar in" style="height:${(d.inc/max*100)}%" title="Income ${fmt(d.inc)}"></div>
+      <div class="bar ex" style="height:${(d.exp/max*100)}%" title="Expense ${fmt(d.exp)}"></div>
+    </div>`).join('');
+  document.getElementById('chartLabels').innerHTML = data.map(d=>`<span>${d.label}</span>`).join('');
+
+  const recent = [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
+  document.getElementById('recentBody').innerHTML = recent.length ? recent.map(t=>`
+    <tr>
+      <td>${t.date}</td>
+      <td style="text-transform:capitalize">${t.type}</td>
+      <td>${t.category}</td>
+      <td>${clientName(t.clientId)}</td>
+      <td class="amt ${t.type}">${t.type==='expense'?'-':''}${fmt(t.amount)}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="empty">Koi entry nahi hai abhi</td></tr>`;
+}
+
+function renderIncome(){
+  const month = document.getElementById('incomeMonthFilter').value;
+  const q = document.getElementById('incomeSearch').value.toLowerCase();
+  let rows = state.transactions.filter(t=>t.type==='income');
+  if(month) rows = rows.filter(t=>t.date.startsWith(month));
+  if(q) rows = rows.filter(t=> (t.note||'').toLowerCase().includes(q) || clientName(t.clientId).toLowerCase().includes(q));
+  rows.sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('incomeBody').innerHTML = rows.length ? rows.map(t=>`
+    <tr>
+      <td>${t.date}</td><td>${t.category}</td><td>${clientName(t.clientId)}</td>
+      <td>${escapeHtml(t.note)||'—'}</td>
+      <td class="amt income">${fmt(t.amount)}</td>
+      <td><button class="btn small" onclick="editTransaction('${t.id}')">Edit</button><button class="btn danger" onclick="deleteTransaction('${t.id}')">Delete</button></td>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty">Koi income entry nahi mili</td></tr>`;
+}
+
+function renderExpense(){
+  const month = document.getElementById('expenseMonthFilter').value;
+  const q = document.getElementById('expenseSearch').value.toLowerCase();
+  let rows = state.transactions.filter(t=>t.type==='expense');
+  if(month) rows = rows.filter(t=>t.date.startsWith(month));
+  if(q) rows = rows.filter(t=> (t.note||'').toLowerCase().includes(q) || clientName(t.clientId).toLowerCase().includes(q));
+  rows.sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('expenseBody').innerHTML = rows.length ? rows.map(t=>`
+    <tr>
+      <td>${t.date}</td><td>${t.category}</td><td>${clientName(t.clientId)}</td>
+      <td>${escapeHtml(t.note)||'—'}</td>
+      <td class="amt expense">${fmt(t.amount)}</td>
+      <td><button class="btn small" onclick="editTransaction('${t.id}')">Edit</button><button class="btn danger" onclick="deleteTransaction('${t.id}')">Delete</button></td>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty">Koi expense entry nahi mili</td></tr>`;
+}
+
+function renderClients(){
+  fillClientSelects();
+  document.getElementById('clientsBody').innerHTML = state.clients.length ? state.clients.map(c=>{
+    const inc = state.transactions.filter(t=>t.type==='income' && t.clientId===c.id).reduce((s,t)=>s+t.amount,0);
+    const exp = state.transactions.filter(t=>t.type==='expense' && t.clientId===c.id).reduce((s,t)=>s+t.amount,0);
+    return `<tr>
+      <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.phone)||'—'}</td>
+      <td>${escapeHtml(c.email)||'—'}</td>
+      <td class="amt income">${fmt(inc)}</td>
+      <td class="amt expense">${fmt(exp)}</td>
+      <td><button class="btn small" onclick="editClient('${c.id}')">Edit</button><button class="btn danger" onclick="deleteClient('${c.id}')">Delete</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" class="empty">Koi client add nahi kiya abhi</td></tr>`;
+}
+
+function renderAll(){
+  fillClientSelects();
+  refreshCategorySelect('income');
+  refreshCategorySelect('expense');
+  renderDashboard();
+  renderIncome();
+  renderExpense();
+  renderClients();
+}
+
+/* ---------- Excel export ---------- */
+function exportExcel(){
+  const wb = XLSX.utils.book_new();
+
+  const incomeRows = state.transactions.filter(t=>t.type==='income').map(t=>({
+    Date:t.date, Category:t.category, Client:clientName(t.clientId), Note:t.note, Amount:t.amount
+  }));
+  const expenseRows = state.transactions.filter(t=>t.type==='expense').map(t=>({
+    Date:t.date, Category:t.category, Client:clientName(t.clientId), Note:t.note, Amount:t.amount
+  }));
+  const clientRows = state.clients.map(c=>{
+    const inc = state.transactions.filter(t=>t.type==='income' && t.clientId===c.id).reduce((s,t)=>s+t.amount,0);
+    const exp = state.transactions.filter(t=>t.type==='expense' && t.clientId===c.id).reduce((s,t)=>s+t.amount,0);
+    return { Name:c.name, Phone:c.phone, Email:c.email, Note:c.note, 'Total Income':inc, 'Total Expense':exp };
+  });
+  const totalIncome = incomeRows.reduce((s,r)=>s+r.Amount,0);
+  const totalExpense = expenseRows.reduce((s,r)=>s+r.Amount,0);
+  const summaryRows = [
+    { Metric:'Total Income', Value: totalIncome },
+    { Metric:'Total Expense', Value: totalExpense },
+    { Metric:'Net Balance', Value: totalIncome-totalExpense },
+    { Metric:'Total Clients', Value: state.clients.length },
+    { Metric:'Exported On', Value: new Date().toLocaleString('en-IN') }
+  ];
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'Summary');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incomeRows.length?incomeRows:[{Date:'',Category:'',Client:'',Note:'',Amount:''}]), 'Income');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(expenseRows.length?expenseRows:[{Date:'',Category:'',Client:'',Note:'',Amount:''}]), 'Expense');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clientRows.length?clientRows:[{Name:'',Phone:'',Email:'',Note:'','Total Income':'','Total Expense':''}]), 'Clients');
+
+  XLSX.writeFile(wb, `company-ledger-${todayISO()}.xlsx`);
+  toast('Excel file export ho gayi');
+}
+
+/* ---------- JSON backup ---------- */
+function exportJSON(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `company-ledger-backup-${todayISO()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Backup file download ho gayi');
+}
+function importJSON(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data.transactions || !data.clients) throw new Error('invalid');
+      state = { transactions:data.transactions, clients:data.clients, categories: data.categories || { income:[], expense:[] }, security: data.security || { passwordHash: null } };
+      saveState();
+      renderAll();
+      toast('Backup restore ho gaya');
+    }catch(err){
+      toast('Ye file valid backup nahi hai');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+/* ---------- Reset ---------- */
+function resetAll(){
+  if(!confirm('Pakka? Sab data permanently delete ho jayega.')) return;
+  const keepSecurity = state.security;
+  state = { transactions:[], clients:[], categories:{ income:[], expense:[] }, security: keepSecurity };
+  saveState();
+  renderAll();
+  toast('Sab data delete ho gaya');
+}
+
+/* ---------- Init ---------- */
+document.getElementById('inDate').value = todayISO();
+document.getElementById('exDate').value = todayISO();
+renderAll();
+flashSaved();
+initCloud();
+
+/* ---------- Autosave safety net ---------- */
+// Har change turant localStorage me save hota hai (upar saveState() se).
+// Ye extra safety hai — tab/window band hone se theek pehle ek aakhri save force karta hai.
+window.addEventListener('beforeunload', saveState);
+window.addEventListener('pagehide', saveState);
+// Har 30 second me bhi ek confirm-save, taaki kabhi bhi state aur storage sync rahe.
+setInterval(saveState, 30000);
+</script>
+</body>
+</html>
